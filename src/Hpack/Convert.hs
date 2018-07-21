@@ -8,14 +8,18 @@ import           Data.Monoid
 import           Prelude                               ()
 import           Prelude.Compat
 
+import qualified Data.String                           as String
 import           Data.List.Split                       (splitOn)
 import           Data.Maybe
 import qualified Data.Version                          as Version
 import qualified Distribution.Compiler                 as Compiler
-import qualified Distribution.InstalledPackageInfo     as Cabal
+import qualified Distribution.InstalledPackageInfo     as Cabal hiding (license)
 import qualified Distribution.Package                  as Cabal
 import qualified Distribution.PackageDescription       as Cabal
-import qualified Distribution.PackageDescription.Parse as Cabal
+import qualified Distribution.PackageDescription.Parsec as Cabal
+import qualified Distribution.Parsec.Common            as Parsec
+import qualified Distribution.Parsec.Newtypes          as Cabal
+import qualified Distribution.Pretty                   as Cabal
 import qualified Distribution.Text                     as Cabal
 import qualified Distribution.Types.UnqualComponentName as Cabal
 import qualified Distribution.Types.LegacyExeDependency as Cabal
@@ -30,7 +34,8 @@ import           Text.PrettyPrint                      (fsep, (<+>))
 -- of a @.cabal@ file
 fromPackageDescription :: Cabal.GenericPackageDescription -> Package
 fromPackageDescription Cabal.GenericPackageDescription{..} =
-    let Cabal.PackageDescription{..} = packageDescription
+    let Cabal.PackageDescription{..} = packageDescription in
+    let license = Cabal.SpecLicense licenseRaw
     in
     Package { packageName = Cabal.unPackageName (Cabal.pkgName package)
             , packageVersion = Cabal.showVersion (Cabal.pkgVersion package)
@@ -43,7 +48,7 @@ fromPackageDescription Cabal.GenericPackageDescription{..} =
             , packageAuthor = maybe [] parseCommaSep (nullNothing author)
             , packageMaintainer = maybe [] parseCommaSep (nullNothing maintainer)
             , packageCopyright = maybe [] parseCommaSep (nullNothing copyright)
-            , packageLicense = Just (show (Cabal.disp license))
+            , packageLicense = Just (show (Cabal.pretty license))
             , packageLicenseFile = listToMaybe licenseFiles
             , packageTestedWith =
                     map toUpper .
@@ -72,12 +77,14 @@ fromPackageDescription Cabal.GenericPackageDescription{..} =
 -- | Reads a 'Package' from a @.cabal@ manifest string
 fromPackageDescriptionString :: String -> Either ConvertError Package
 fromPackageDescriptionString pkgStr =
-    case Cabal.parsePackageDescription pkgStr of
-        Cabal.ParseFailed e  -> Left (ConvertCabalParseError e)
-        Cabal.ParseOk _ gpkg -> Right (fromPackageDescription gpkg)
+    let result = Cabal.parseGenericPackageDescription (String.fromString pkgStr)
+        (_, result') = Cabal.runParseResult result
+    in case result' of
+        Left (_, (e:_)) -> Left (ConvertCabalParseError e)
+        Right gpkg      -> Right (fromPackageDescription gpkg)
 
-data ConvertError = ConvertCabalParseError Cabal.PError
-  deriving(Show, Eq)
+data ConvertError = ConvertCabalParseError Parsec.PError
+  deriving(Show)
 
 -- data ConvertWarning = CWIgnoreSection String
 --                     | CWIgnoreCondition String
