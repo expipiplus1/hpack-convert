@@ -84,7 +84,7 @@ fromPackageDescriptionString pkgStr =
         Right gpkg      -> Right (fromPackageDescription gpkg)
 
 data ConvertError = ConvertCabalParseError Parsec.PError
-  deriving(Show)
+  deriving(Show, Eq)
 
 -- data ConvertWarning = CWIgnoreSection String
 --                     | CWIgnoreCondition String
